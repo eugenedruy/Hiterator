@@ -88,6 +88,10 @@ struct StorageCommonTraits {
         return EMPTY_KEY;
     }
 
+    static const Key& endKey() {
+        static const Key END_KEY = std::make_tuple(typename Types::TypeName{"MagicEndWord"}...);
+        return END_KEY;
+    }
 };
 
 
@@ -112,12 +116,14 @@ struct tm makeDate(int year)
 
 static Cars::TypesMap cars;
 
-template <class TypesMap>
-typename TypesMap::key_type printN(std::ostream& ostr,
-                                   const TypesMap& typesMap,
-                                   typename TypesMap::key_type const& first,
+template <class Type>
+typename Type::TypesMap::key_type printN(std::ostream& ostr,
+                                   typename Type::TypesMap const& typesMap,
+                                   typename Type::TypesMap::key_type const& first,
                                    size_t n)
 {
+    if(Type::endKey() == first)
+        return first;
     auto iter = typesMap.lower_bound(first);
     for( ;n > 0 && typesMap.end() != iter; ++iter, --n)
     {
@@ -128,7 +134,7 @@ typename TypesMap::key_type printN(std::ostream& ostr,
         << " model: " << iter->second.model.data()
         << std::endl;
     }
-    return iter->first;
+    return typesMap.end() != iter ? iter->first : Type::endKey();
 
 }
 
@@ -255,11 +261,13 @@ int main(int argc, char* argv[]) {
     std::cout << "============== use print==============" << std::endl;
     auto nextKey = Cars::emptyKey();
     int count  = 0;
-    while(cars.end()->first != nextKey)
+
+    while(Cars::endKey() != nextKey)
     {
-        nextKey = printN(std::cout, cars, nextKey,2);
+        nextKey = printN<Cars>(std::cout, cars, nextKey, 2);
         std::cout << "============== page " << ++count << " ==============" << std::endl;
     }
+
 
 
 }
