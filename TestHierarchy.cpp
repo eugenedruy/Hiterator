@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <random>
 #include <iostream>
+#include "intSequence.hpp"
 
 
 
