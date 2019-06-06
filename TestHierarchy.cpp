@@ -8,6 +8,7 @@
 #include <random>
 #include <iostream>
 #include "intSequence.hpp"
+#include <type_traits>
 
 
 
@@ -41,6 +42,22 @@ struct Car
     TypeName make;
     struct tm makeDate;
     std::array <char,64> model;
+
+    static void print(
+            std::ostream& ostr,
+            const Car& car,
+            char const* rentalName,
+            char const* cityName,
+            char const* carName)
+    {
+        ostr
+        << " company " << rentalName
+        << " city: " << cityName
+        << " make: " << carName
+        << " model: " << car.model.data()
+        << std::endl;
+
+    }
 };
 
 
@@ -79,20 +96,34 @@ struct StorageCommonTraits {
         }
     };
 
+
     using LastType = typename std::tuple_element<sizeof...(Types)-1, TypesTuple>::type;
 
     using TypesMap = std::map<Key,LastType, TypeComparator>;
 
     // Has to be chosen so that it is less or equal than any other key
-    static const Key& emptyKey() {
-        static const Key EMPTY_KEY = std::make_tuple(typename Types::TypeName()...);
-        return EMPTY_KEY;
+    static const Key& startKey() {
+        static const Key START_KEY = std::make_tuple(typename Types::TypeName()...);
+        return START_KEY;
     }
 
     static const Key& endKey() {
-        static const Key END_KEY = std::make_tuple(typename Types::TypeName{"MagicEndWord"}...);
+        static const Key END_KEY = std::make_tuple(typename Types::TypeName{"MagicEndKey"}...);
         return END_KEY;
     }
+
+    template <int ...S>
+    static void print1(std::ostream& ostr, LastType const& value, Key const& t, seq::seq<S...>)
+    {
+        LastType::print(ostr, value, std::get<S>(t).data()...);
+    }
+
+    static void print(std::ostream& ostr, Key const& key, LastType const& value)
+    {
+        print1(ostr, value, key, typename seq::gens<sizeof...(Types)>::type());
+    }
+
+
 };
 
 
@@ -128,16 +159,33 @@ typename Type::TypesMap::key_type printN(std::ostream& ostr,
     auto iter = typesMap.lower_bound(first);
     for( ;n > 0 && typesMap.end() != iter; ++iter, --n)
     {
+        Type::print(ostr, iter->first, iter->second);
+    }
+    return typesMap.end() != iter ? iter->first : Type::endKey();
+
+}
+
+/*
+template <class Type, int ...S>
+typename Type::TypesMap::key_type printN(std::ostream& ostr,
+                                   typename Type::TypesMap const& typesMap,
+                                   typename Type::TypesMap::key_type const& first,
+                                   size_t n,
+                                   seq::seq<S...>)
+{
+    if(Type::endKey() == first)
+        return first;
+    auto iter = typesMap.lower_bound(first);
+    for( ;n > 0 && typesMap.end() != iter; ++iter, --n)
+    {
         ostr
-        << " company " << std::get<0>(iter->first).data()
-        << " city: " << std::get<1>(iter->first).data()
-        << " make: " << iter->second.make.data()
-        << " model: " << iter->second.model.data()
+        << std::get<S>(iter->first).data()
         << std::endl;
     }
     return typesMap.end() != iter ? iter->first : Type::endKey();
 
 }
+*/
 
 int main(int argc, char* argv[]) {
 
@@ -247,7 +295,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "============== from dummy key access==============" << std::endl;
 
-    iter = cars.lower_bound(Cars::emptyKey());
+    iter = cars.lower_bound(Cars::startKey());
 
     for (;cars.end() != iter;++iter)
     {
@@ -260,7 +308,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "============== use print==============" << std::endl;
-    auto nextKey = Cars::emptyKey();
+    auto nextKey = Cars::startKey();
     int count  = 0;
 
     while(Cars::endKey() != nextKey)
