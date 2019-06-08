@@ -19,7 +19,7 @@ struct RentalCompany
     unsigned int id;
 };
 
-struct City
+struct Office
 {
     typedef std::array<char,80> TypeName;
     TypeName name;
@@ -47,17 +47,40 @@ struct Car
             std::ostream& ostr,
             const Car& car,
             char const* rentalName,
-            char const* cityName,
+            char const* officeName,
             char const* carName)
     {
         ostr
         << " company " << rentalName
-        << " city: " << cityName
+        << " city: " << officeName
         << " make: " << carName
         << " model: " << car.model.data()
         << std::endl;
 
     }
+
+    static void print(
+            std::ostream& ostr,
+            const Car& car,
+            char const* rentalName,
+            char const* officeName,
+            char const* carName,
+            char const* rentalName1,
+            char const* officeName1,
+            char const* carName1
+            )
+    {
+        ostr
+        << " print 6 "
+        << " company " << rentalName
+        << " city: " << officeName
+        << " make: " << carName
+        << " model: " << car.model.data()
+        << std::endl;
+
+    }
+
+
 };
 
 
@@ -113,23 +136,73 @@ struct StorageCommonTraits {
     }
 
     template <int ...S>
-    static void print1(std::ostream& ostr, LastType const& value, Key const& t, seq::seq<S...>)
+    static void print(std::ostream& ostr, LastType const& value, Key const& t, seq::seq<S...>)
     {
-        LastType::print(ostr, value, std::get<S>(t).data()...);
+        LastType::print(ostr, value, std::get<S>(t).data()...,std::get<S>(t).data()...);
     }
 
     static void print(std::ostream& ostr, Key const& key, LastType const& value)
     {
-        print1(ostr, value, key, typename seq::gens<sizeof...(Types)>::type());
+        print(ostr, value, key, typename seq::gens<sizeof...(Types)>::type());
+    }
+
+    static void print(Key const& key, LastType const& value, std::ostream& ostr)
+    {
+        print(ostr, value, key, typename seq::gens<sizeof...(Types)>::type());
     }
 
 
+    template <typename... Args>
+    class Iterator
+    {
+        using Type = StorageCommonTraits<Types...>;
+
+        TypesMap const& typesMap;
+        typename TypesMap::const_iterator iter;
+        std::tuple<Args&...> args;
+    public:
+        Iterator(TypesMap const& tmap, Key const& first, Args&... argsParams) :
+            typesMap(tmap),
+            iter(endKey() == first ? tmap.end() : tmap.lower_bound(first)),
+            args(argsParams...)
+        {}
+
+        template <typename Function>
+        typename Type::TypesMap::key_type handleN(int n, Function& f)
+        {
+            if(typesMap.end() == iter)
+                return endKey();
+
+
+            for( ;n > 0 && typesMap.end() != iter; ++iter, --n)
+            {
+                callf(f, typename seq::gens<sizeof...(Args)>::type());
+            }
+            return typesMap.end() != iter ? iter->first : Type::endKey();
+        }
+
+    private:
+        template <typename Function, int ...S>
+        void callf(Function& f, seq::seq<S...>)
+        {
+            f(iter->first, iter->second,std::get<S>(args)...);
+
+        }
+    };
+};
+
+template<typename... Args>
+struct S
+{
+    std::tuple<Args&...> args;
+    S(Args&... params) : args(params...) {}
 };
 
 
-using Cars = StorageCommonTraits<RentalCompany, City, Car>;
 
-using Cities = StorageCommonTraits<RentalCompany, City>;
+using Cars = StorageCommonTraits<RentalCompany, Office, Car>;
+
+using Offices = StorageCommonTraits<RentalCompany, Office>;
 
 using RentalCompanies = StorageCommonTraits<RentalCompany>;
 
@@ -144,6 +217,7 @@ struct tm makeDate(int year)
 {
     return makeDate(year,0);
 }
+
 
 
 static Cars::TypesMap cars;
@@ -189,10 +263,10 @@ typename Type::TypesMap::key_type printN(std::ostream& ostr,
 
 int main(int argc, char* argv[]) {
 
-    Cities::Key ctkey11 = std::make_tuple
+    Offices::Key ctkey11 = std::make_tuple
     (
         RentalCompany::TypeName{"EuroCar"},
-        City::TypeName{"Paris"}
+        Office::TypeName{"Paris"}
     );
 
 
@@ -203,7 +277,7 @@ int main(int argc, char* argv[]) {
     Cars::Key crkey111 = std::make_tuple
     (
         RentalCompany::TypeName{"EuroCar"},
-        City::TypeName{"Paris"},
+        Office::TypeName{"Paris"},
         car1.make
     );
 
@@ -227,7 +301,7 @@ int main(int argc, char* argv[]) {
     Cars::Key crkey124 = std::make_tuple
     (
         RentalCompany::TypeName{"EuroCar"},
-        City::TypeName{"London"},
+        Office::TypeName{"London"},
         car4.make
     );
 
@@ -236,7 +310,7 @@ int main(int argc, char* argv[]) {
     Cars::Key crkey211 = std::make_tuple
     (
         RentalCompany::TypeName{"Avis"},
-        City::TypeName{"Paris"},
+        Office::TypeName{"Paris"},
         car2.make
     );
 
@@ -245,7 +319,7 @@ int main(int argc, char* argv[]) {
     Cars::Key crkey221 = std::make_tuple
     (
         RentalCompany::TypeName{"Avis"},
-        City::TypeName{"London"},
+        Office::TypeName{"London"},
         car3.make
     );
 
@@ -255,7 +329,7 @@ int main(int argc, char* argv[]) {
     Cars::Key crkey222 = std::make_tuple
     (
         RentalCompany::TypeName{"Avis"},
-        City::TypeName{"London"},
+        Office::TypeName{"London"},
         car2.make
     );
 
@@ -264,7 +338,7 @@ int main(int argc, char* argv[]) {
     Cars::Key crkey114 = std::make_tuple
     (
         RentalCompany::TypeName{"EuroCar"},
-        City::TypeName{"Paris"},
+        Office::TypeName{"Paris"},
         car4.make
     );
 
@@ -317,7 +391,25 @@ int main(int argc, char* argv[]) {
         std::cout << "============== page " << ++count << " ==============" << std::endl;
     }
 
+    std::cout << "============== use iterator==============" << std::endl;
+    Cars::Iterator<std::ostream> carsIter(cars, Cars::startKey(), std::cout);
 
+
+    using ThePrintType = void(&)(Cars::TypesMap::key_type const&, Cars::LastType const&, std::ostream&);
+    typedef void(&ThePrintType1)(Cars::TypesMap::key_type const&, Cars::LastType const&, std::ostream&);
+    nextKey = carsIter.handleN(2,(ThePrintType)Cars::print);
+
+
+
+    /*
+    int count  = 0;
+
+    while(Cars::endKey() != nextKey)
+    {
+        nextKey = printN<Cars>(std::cout, cars, nextKey, 2);
+        std::cout << "============== page " << ++count << " ==============" << std::endl;
+    }
+    */
 
 }
 
