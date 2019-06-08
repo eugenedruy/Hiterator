@@ -23,15 +23,22 @@ struct Office
 {
     typedef std::array<char,80> TypeName;
     TypeName name;
-    std::string zip; // zip code
+    std::array <char,32> zip; // zip code
     unsigned int id;
 
-    /*
-    template <typename CityIndexerKey>
-    void setIndex(CityIndexerKey& key,  const std::string& cityName) {
-        key.set
+    static void print(
+            std::ostream& ostr,
+            const Office& office,
+            char const* rentalName,
+            char const* officeName)
+    {
+        ostr
+        << " company " << rentalName
+        << " city: " << officeName
+        << " zip: " << office.zip.data()
+        << std::endl;
+
     }
-    */
 
 };
 
@@ -138,7 +145,7 @@ struct StorageCommonTraits {
     template <int ...S>
     static void print(std::ostream& ostr, LastType const& value, Key const& t, seq::seq<S...>)
     {
-        LastType::print(ostr, value, std::get<S>(t).data()...,std::get<S>(t).data()...);
+        LastType::print(ostr, value, std::get<S>(t).data()...);
     }
 
     static void print(std::ostream& ostr, Key const& key, LastType const& value)
@@ -221,6 +228,7 @@ struct tm makeDate(int year)
 
 
 static Cars::TypesMap cars;
+static Offices::TypesMap offices;
 
 template <class Type>
 typename Type::TypesMap::key_type printN(std::ostream& ostr,
@@ -239,37 +247,8 @@ typename Type::TypesMap::key_type printN(std::ostream& ostr,
 
 }
 
-/*
-template <class Type, int ...S>
-typename Type::TypesMap::key_type printN(std::ostream& ostr,
-                                   typename Type::TypesMap const& typesMap,
-                                   typename Type::TypesMap::key_type const& first,
-                                   size_t n,
-                                   seq::seq<S...>)
+void populateCars(Cars::TypesMap& cars)
 {
-    if(Type::endKey() == first)
-        return first;
-    auto iter = typesMap.lower_bound(first);
-    for( ;n > 0 && typesMap.end() != iter; ++iter, --n)
-    {
-        ostr
-        << std::get<S>(iter->first).data()
-        << std::endl;
-    }
-    return typesMap.end() != iter ? iter->first : Type::endKey();
-
-}
-*/
-
-int main(int argc, char* argv[]) {
-
-    Offices::Key ctkey11 = std::make_tuple
-    (
-        RentalCompany::TypeName{"EuroCar"},
-        Office::TypeName{"Paris"}
-    );
-
-
     Car car1 = {"Renault", makeDate(2015), "r12345a"};
     Car car2 = {"Citroen", makeDate(2018), "c12345a"};
     Car car3 = {"Opel", makeDate(2017), "o12345a"};
@@ -344,42 +323,97 @@ int main(int argc, char* argv[]) {
 
     cars.insert({crkey114, car4});
 
-    for (auto const& carKeyVal : cars)
+}
+
+void populateOffices(Offices::TypesMap& offices)
+{
+
+    unsigned int id = 1;
+    Office office1 = {"Paris", "paris_zip", id++};
+    Office office2 = {"London", "london_zip", id++};
+    Office office3 = {"Boston", "boston_zip", id++};
+
+    Offices::Key ofckey11 = std::make_tuple
+    (
+        RentalCompany::TypeName{"EuroCar"},
+        office1.name
+    );
+
+
+    offices.insert({ofckey11, office1});
+
+
+    Office office4 = {"Seattle", "seattle_zip", id++};
+
+
+    Offices::Key ofckey124 = std::make_tuple
+    (
+        RentalCompany::TypeName{"EuroCar"},
+        office4.name
+    );
+
+    offices.insert({ofckey124, office4});
+
+    Offices::Key ofckey211 = std::make_tuple
+    (
+        RentalCompany::TypeName{"Avis"},
+        office2.name
+    );
+
+    offices.insert({ofckey211, office2});
+
+    Offices::Key ofckey221 = std::make_tuple
+    (
+        RentalCompany::TypeName{"Avis"},
+        office3.name
+    );
+
+
+    offices.insert({ofckey221, office3});
+
+    Offices::Key ofckey222 = std::make_tuple
+    (
+        RentalCompany::TypeName{"Avis"},
+        office2.name
+    );
+
+    offices.insert({ofckey222, office2});
+
+    Offices::Key ofckey114 = std::make_tuple
+    (
+        RentalCompany::TypeName{"Hertz"},
+        office4.name
+    );
+
+    offices.insert({ofckey114, office4});
+}
+
+
+template <typename Container>
+using ThePrintType = void(&)(typename Container::TypesMap::key_type const&,
+                             typename Container::LastType const&,
+                             std::ostream&);
+
+template <typename Container>
+void processN(typename Container::TypesMap const& theMap, ThePrintType<Container>& f, int n)
+{
+    int count  = 0;
+    auto nextKey = Container::startKey();
+    while(Container::endKey() != nextKey)
     {
-        std::cout
-            << " company " << std::get<0>(carKeyVal.first).data()
-            << " city: " << std::get<1>(carKeyVal.first).data()
-            << " make: " << carKeyVal.second.make.data()
-            << " model: " << carKeyVal.second.model.data()
-            << std::endl;
+        typename Container::template Iterator<std::ostream> iter(theMap, nextKey, std::cout);
+        std::cout << "============== page " << ++count << " ==============" << std::endl;
+        nextKey = iter.handleN(3,f);
     }
 
+}
 
-    std::cout << "============== random access==============" << std::endl;
-    auto iter = cars.lower_bound(crkey211);
-    for (;cars.end() != iter;++iter)
-    {
-        std::cout
-            << " company " << std::get<0>(iter->first).data()
-            << " city: " << std::get<1>(iter->first).data()
-            << " make: " << iter->second.make.data()
-            << " model: " << iter->second.model.data()
-            << std::endl;
-    }
 
-    std::cout << "============== from dummy key access==============" << std::endl;
+int main(int argc, char* argv[])
+{
 
-    iter = cars.lower_bound(Cars::startKey());
-
-    for (;cars.end() != iter;++iter)
-    {
-        std::cout
-            << " company " << std::get<0>(iter->first).data()
-            << " city: " << std::get<1>(iter->first).data()
-            << " make: " << iter->second.make.data()
-            << " model: " << iter->second.model.data()
-            << std::endl;
-    }
+    populateCars(cars);
+    populateOffices(offices);
 
     std::cout << "============== use print==============" << std::endl;
     auto nextKey = Cars::startKey();
@@ -387,30 +421,37 @@ int main(int argc, char* argv[]) {
 
     while(Cars::endKey() != nextKey)
     {
-        nextKey = printN<Cars>(std::cout, cars, nextKey, 2);
         std::cout << "============== page " << ++count << " ==============" << std::endl;
+        nextKey = printN<Cars>(std::cout, cars, nextKey, 2);
     }
 
     std::cout << "============== use iterator==============" << std::endl;
-    Cars::Iterator<std::ostream> carsIter(cars, Cars::startKey(), std::cout);
+    //using ThePrintType = void(&)(Cars::TypesMap::key_type const&, Cars::LastType const&, std::ostream&);
 
-
-    using ThePrintType = void(&)(Cars::TypesMap::key_type const&, Cars::LastType const&, std::ostream&);
-    typedef void(&ThePrintType1)(Cars::TypesMap::key_type const&, Cars::LastType const&, std::ostream&);
-    nextKey = carsIter.handleN(2,(ThePrintType)Cars::print);
-
-
-
-    /*
-    int count  = 0;
-
-    while(Cars::endKey() != nextKey)
+    count  = 0;
+    auto nextCarKey = Cars::startKey();
+    while(Cars::endKey() != nextCarKey)
     {
-        nextKey = printN<Cars>(std::cout, cars, nextKey, 2);
+        Cars::Iterator<std::ostream> carsIter(cars, nextCarKey, std::cout);
         std::cout << "============== page " << ++count << " ==============" << std::endl;
+        nextCarKey = carsIter.handleN(4,(ThePrintType<Cars>)Cars::print);
     }
-    */
 
+
+    std::cout << "============== use iterator for offices==============" << std::endl;
+
+    count  = 0;
+    auto nextOfficeKey = Offices::startKey();
+    while(Offices::endKey() != nextOfficeKey)
+    {
+        Offices::Iterator<std::ostream> officesIter(offices, nextOfficeKey, std::cout);
+        std::cout << "============== page " << ++count << " ==============" << std::endl;
+        nextOfficeKey = officesIter.handleN(3,(ThePrintType<Offices>)Offices::print);
+    }
+
+
+    std::cout << "============== use generic processor for offices==============" << std::endl;
+    processN<Offices>(offices, (ThePrintType<Offices>)Offices::print, 3);
 }
 
 
