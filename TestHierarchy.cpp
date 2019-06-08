@@ -394,16 +394,16 @@ using ThePrintType = void(&)(typename Container::TypesMap::key_type const&,
                              typename Container::LastType const&,
                              std::ostream&);
 
-template <typename Container>
-void processN(typename Container::TypesMap const& theMap, ThePrintType<Container>& f, int n)
+template <typename Container, typename... Args>
+void processN(typename Container::TypesMap const& theMap, ThePrintType<Container>& f, int n, Args&... args)
 {
     int count  = 0;
     auto nextKey = Container::startKey();
     while(Container::endKey() != nextKey)
     {
-        typename Container::template Iterator<std::ostream> iter(theMap, nextKey, std::cout);
+        typename Container::template Iterator<Args...> iter(theMap, nextKey, args...);
         std::cout << "============== page " << ++count << " ==============" << std::endl;
-        nextKey = iter.handleN(3,f);
+        nextKey = iter.handleN(n,f);
     }
 
 }
@@ -451,7 +451,7 @@ int main(int argc, char* argv[])
 
 
     std::cout << "============== use generic processor for offices==============" << std::endl;
-    processN<Offices>(offices, (ThePrintType<Offices>)Offices::print, 3);
+    processN<Offices>(offices, (ThePrintType<Offices>)Offices::print, 3, std::cout);
 }
 
 
