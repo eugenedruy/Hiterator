@@ -40,6 +40,19 @@ struct Office
 
     }
 
+    static void print(
+            const Office& office,
+            char const* rentalName,
+            char const* officeName,
+            std::ostream& ostr)
+    {
+        ostr
+        << " company " << rentalName
+        << " city: " << officeName
+        << " zip: " << office.zip.data()
+        << std::endl;
+
+    }
 };
 
 
@@ -67,6 +80,16 @@ struct Car
     }
 
     static void print(
+            const Car& car,
+            char const* rentalName,
+            char const* officeName,
+            char const* carName,
+            std::ostream& ostr)
+    {
+        print(ostr, car, rentalName, officeName, carName);
+    }
+
+    static void print(
             std::ostream& ostr,
             const Car& car,
             char const* rentalName,
@@ -90,10 +113,8 @@ struct Car
 
 };
 
-
-
 template <typename... Types>
-struct StorageCommonTraits {
+struct HirerachyTraits {
 
     using Key = std::tuple<typename Types::TypeName...>;
     // parameters pack -> tuple
@@ -158,24 +179,47 @@ struct StorageCommonTraits {
         print(ostr, value, key, typename seq::gens<sizeof...(Types)>::type());
     }
 
+    template<typename U, typename V>
+    struct Processor { };
+
+    template <typename U, int... S>
+    struct Processor<U, seq::seq<S...> >
+    {
+        template <typename Function, typename... Args>
+        static void process(Key const& key,LastType const& value, Function& f, Args&... args)
+        {
+            f(value, std::get<S>(key).data()..., args...);
+
+        }
+    };
+
+
+    template <typename Function, typename... Args>
+    static void process(Key const& key, LastType const& value, Function& f, Args&... args)
+    {
+        Processor<int, typename seq::gens<std::tuple_size<Key>::value>::type>::process(key, value, f, args...);
+    }
 
     template <typename... Args>
-    class Iterator
+    class BatchIterator
     {
-        using Type = StorageCommonTraits<Types...>;
+        using Type = HirerachyTraits<Types...>;
 
         TypesMap const& typesMap;
         typename TypesMap::const_iterator iter;
         std::tuple<Args&...> args;
     public:
-        Iterator(TypesMap const& tmap, Key const& first, Args&... argsParams) :
+        BatchIterator(TypesMap const& tmap, Key const& first, Args&... argsParams) :
             typesMap(tmap),
             iter(endKey() == first ? tmap.end() : tmap.lower_bound(first)),
             args(argsParams...)
         {}
 
         template <typename Function>
-        typename Type::TypesMap::key_type handleN(int n, Function& f)
+        typename Type::TypesMap::key_type handleNWithTraitsAdapter(
+                int n,
+                Function& f // traits adapter function
+                )
         {
             if(typesMap.end() == iter)
                 return endKey();
@@ -188,30 +232,80 @@ struct StorageCommonTraits {
             return typesMap.end() != iter ? iter->first : Type::endKey();
         }
 
+        template <typename Function>
+        typename Type::TypesMap::key_type handleNDirect(
+                int n,
+                Function& f // direct object function
+                )
+        {
+            if(typesMap.end() == iter)
+                return endKey();
+
+            for( ;n > 0 && typesMap.end() != iter; ++iter, --n)
+            {
+                callfExtended(f, typename seq::gens<sizeof...(Args)>::type());
+            }
+            return typesMap.end() != iter ? iter->first : Type::endKey();
+        }
     private:
+        // Expands args using int sequence
         template <typename Function, int ...S>
         void callf(Function& f, seq::seq<S...>)
         {
             f(iter->first, iter->second,std::get<S>(args)...);
 
         }
+
+        // args extended in the call invokation,
+        // the key tuple gets expanded inside the call to process
+        template <typename Function, int ...S>
+        void callfExtended(Function& f, seq::seq<S...>)
+        {
+            Type::process(iter->first, iter->second, f, std::get<S>(args)...);
+        }
     };
 };
 
-template<typename... Args>
-struct S
+
+template <typename Container>
+using ThePrintType = void(&)(typename Container::TypesMap::key_type const&,
+                             typename Container::LastType const&,
+                             std::ostream&);
+
+template <typename Container, typename... Args>
+void processNWithAdapter(typename Container::TypesMap const& theMap, ThePrintType<Container>& f, int n, Args&... args)
 {
-    std::tuple<Args&...> args;
-    S(Args&... params) : args(params...) {}
-};
+    int count  = 0;
+    auto nextKey = Container::startKey();
+    while(Container::endKey() != nextKey)
+    {
+        typename Container::template BatchIterator<Args...> iter(theMap, nextKey, args...);
+        std::cout << "============== page " << ++count << " ==============" << std::endl;
+        nextKey = iter.handleNWithTraitsAdapter(n,f);
+    }
+
+}
+
+template <typename Container, typename F, typename... Args>
+void processNDirect(typename Container::TypesMap const& theMap, F& f, int n, Args&... args)
+{
+    int count  = 0;
+    auto nextKey = Container::startKey();
+    while(Container::endKey() != nextKey)
+    {
+        typename Container::template BatchIterator<Args...> iter(theMap, nextKey, args...);
+        std::cout << "============== page " << ++count << " ==============" << std::endl;
+        nextKey = iter.handleNDirect(n,f);
+    }
+
+}
 
 
+using Cars = HirerachyTraits<RentalCompany, Office, Car>;
 
-using Cars = StorageCommonTraits<RentalCompany, Office, Car>;
+using Offices = HirerachyTraits<RentalCompany, Office>;
 
-using Offices = StorageCommonTraits<RentalCompany, Office>;
-
-using RentalCompanies = StorageCommonTraits<RentalCompany>;
+using RentalCompanies = HirerachyTraits<RentalCompany>;
 
 struct tm makeDate(int year,
                    int month// months since jan
@@ -389,25 +483,6 @@ void populateOffices(Offices::TypesMap& offices)
 }
 
 
-template <typename Container>
-using ThePrintType = void(&)(typename Container::TypesMap::key_type const&,
-                             typename Container::LastType const&,
-                             std::ostream&);
-
-template <typename Container, typename... Args>
-void processN(typename Container::TypesMap const& theMap, ThePrintType<Container>& f, int n, Args&... args)
-{
-    int count  = 0;
-    auto nextKey = Container::startKey();
-    while(Container::endKey() != nextKey)
-    {
-        typename Container::template Iterator<Args...> iter(theMap, nextKey, args...);
-        std::cout << "============== page " << ++count << " ==============" << std::endl;
-        nextKey = iter.handleN(n,f);
-    }
-
-}
-
 
 int main(int argc, char* argv[])
 {
@@ -426,15 +501,14 @@ int main(int argc, char* argv[])
     }
 
     std::cout << "============== use iterator==============" << std::endl;
-    //using ThePrintType = void(&)(Cars::TypesMap::key_type const&, Cars::LastType const&, std::ostream&);
 
     count  = 0;
     auto nextCarKey = Cars::startKey();
     while(Cars::endKey() != nextCarKey)
     {
-        Cars::Iterator<std::ostream> carsIter(cars, nextCarKey, std::cout);
+        Cars::BatchIterator<std::ostream> carsIter(cars, nextCarKey, std::cout);
         std::cout << "============== page " << ++count << " ==============" << std::endl;
-        nextCarKey = carsIter.handleN(4,(ThePrintType<Cars>)Cars::print);
+        nextCarKey = carsIter.handleNWithTraitsAdapter(4,(ThePrintType<Cars>)Cars::print);
     }
 
 
@@ -444,14 +518,21 @@ int main(int argc, char* argv[])
     auto nextOfficeKey = Offices::startKey();
     while(Offices::endKey() != nextOfficeKey)
     {
-        Offices::Iterator<std::ostream> officesIter(offices, nextOfficeKey, std::cout);
+        Offices::BatchIterator<std::ostream> officesIter(offices, nextOfficeKey, std::cout);
         std::cout << "============== page " << ++count << " ==============" << std::endl;
-        nextOfficeKey = officesIter.handleN(3,(ThePrintType<Offices>)Offices::print);
+        nextOfficeKey = officesIter.handleNWithTraitsAdapter(3,(ThePrintType<Offices>)Offices::print);
     }
 
 
-    std::cout << "============== use generic processor for offices==============" << std::endl;
-    processN<Offices>(offices, (ThePrintType<Offices>)Offices::print, 3, std::cout);
+    std::cout << "============== use generic processor with traits adapter for offices==============" << std::endl;
+    processNWithAdapter<Offices>(offices, (ThePrintType<Offices>)Offices::print, 3, std::cout);
+
+    using OfficePrint = void(&)(const Office&, char const*, char const*, std::ostream&);
+
+
+    std::cout << "============== use generic processor parameterized with LastType function for offices==============" << std::endl;
+    processNDirect<Offices>(offices, (OfficePrint)Office::print, 3, std::cout);
+
 }
 
 
