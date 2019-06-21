@@ -25,11 +25,21 @@ where -> denotes parent to child relationship.
 The test cases iterate hierarchy objects wih processing of each object being iterated.
 Processing can be anything, but for test case it was chosen to be just printing   
 At the end of the batch iteration a client receives a key to resume iteration for the next batch.
-
 >#### Adapter delegation ( use of printN function) ####
+Preceded with "============== use print=============="  
 A relatively trivial approach.  
 It is not parameterized with a processor function, but simply calls a predefined adapter function. (Adapters<HierarchyType>::print, where HierarchyType is etier Hier3 or Hier2 described above) 
 The adapter however is generic and is capable of expanding a key of arbitrary depth when delegating it to a print method of the leaf type in the hierarchy. 
-Obviously the problem is lack of flexinility. The adapter is predefined and use of a different processor would require modifying the hardcoded adapter 
-
+Obviously the problem is lack of flexibility. The adapter is predefined and use of a different processor would require modifying the hardcoded adapter 
 >#### Iterator with adapter parameterization ( use of BatchIterator::handleNWithTraitsAdapter function) ####
+Preceded with "============== use iterator=============="  
+and "============== use iterator for offices==============" for another hierarchy  
+This sample uses an iterator parameterized with an adapter function Adapters<Cars>::print.
+The iterator template parameters though are arguments of the adapter function (ostream is a template parameter and std::cout is an instance of the template parameter). 
+This example is more flexible then the previous one, but it has to use an adapter method 
+>#### Processor parameterized with adapter (use of processNWithAdapter) ####
+Preceded with "============== use generic processor with traits adapter for offices=============="  
+A little improvement over prev ious case which wraps the iterator inside a generic processor function, therefore hiding iterator details and dependencies (such as template parameters) from the client. Processor deduces the iterator instantiation based on the template parameters passed. However there is still a drawback of using an adapter instead of ditrect processing function
+>#### Processor parameterized with direct processing method (use of processNDirect) ####
+Preceded with "============== use generic processor parameterized with LastType function for offices=============="  
+The iterator instantiation is wrapped inside the processor and an adapter is no longer needed. The wrapper is parameterized directly with processing function (Office::print) and the processing function arguments (std::cout).  Note: There is only one argument in this particular case, but the framework allows an arbitrary number of parameters
